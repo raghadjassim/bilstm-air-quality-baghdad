@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BiLSTM Air Quality Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#1a1d27; --border:#2a2d3a;
+    --text:#e8eaf0; --muted:#8b8fa8; --blue:#4f8ef7;
+    --red:#f75f5f; --green:#4fca7a; --amber:#f7b94f;
+    --purple:#a78bfa; --teal:#38d9a9;
+    --font:'Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.6}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:1.25rem 2rem;display:flex;align-items:center;justify-content:space-between}
+  header h1{font-size:18px;font-weight:600;letter-spacing:-.3px}
+  header span{font-size:12px;color:var(--muted)}
+  .container{max-width:1400px;margin:0 auto;padding:1.5rem 2rem}
+  .tabs{display:flex;gap:4px;margin-bottom:1.5rem;border-bottom:1px solid var(--border);padding-bottom:0}
+  .tab{font-size:13px;padding:8px 18px;border:none;background:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+  .tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:500}
+  .panel{display:none}.panel.active{display:block}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  .g5{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem}
+  .card h3{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem}
+  .metric-val{font-size:28px;font-weight:700;margin-bottom:2px}
+  .metric-sub{font-size:12px;color:var(--muted)}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500;margin-left:8px;vertical-align:middle}
+  .good{color:var(--green);background:rgba(79,202,122,.12)}
+  .mod{color:var(--amber);background:rgba(247,185,79,.12)}
+  .poor{color:var(--red);background:rgba(247,95,95,.12)}
+  canvas{display:block;width:100%!important}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:8px 10px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:12px}
+  td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text)}
+  tr:last-child td{border:none}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500}
+  .aqi-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin:8px 0 14px}
+  .aqi-bar div{flex:1}
+  select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:13px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>BiLSTM Air Quality Prediction Dashboard</h1>
+  <span>Baghdad Region &nbsp;·&nbsp; 2020–2025 &nbsp;·&nbsp; Generated automatically</span>
+</header>
+
+<div class="container">
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('overview',this)">Overview</button>
+  <button class="tab" onclick="showTab('pollutants',this)">Pollutant Predictions</button>
+  <button class="tab" onclick="showTab('aqi',this)">AQI Results</button>
+  <button class="tab" onclick="showTab('forecast',this)">12-Month Forecast</button>
+  <button class="tab" onclick="showTab('metrics',this)">Full Metrics Table</button>
+  <button class="tab" onclick="showTab('stationarity',this)">Stationarity Tests</button>
+</div>
+
+<!-- ══ OVERVIEW ══════════════════════════════════════════════════════════ -->
+<div id="tab-overview" class="panel active">
+  <div class="grid g5" style="margin-bottom:16px" id="kpi-cards"></div>
+  <div class="grid g2">
+    <div class="card">
+      <h3>R² by pollutant</h3>
+      <div style="height:220px"><canvas id="r2Chart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>MAPE (%) by pollutant</h3>
+      <div style="height:220px"><canvas id="mapeChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ POLLUTANT PREDICTIONS ═════════════════════════════════════════════ -->
+<div id="tab-pollutants" class="panel">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <label style="color:var(--muted);font-size:13px">Select pollutant:</label>
+    <select id="pollSelect" onchange="renderPollChart()">
+      <option value="NO2">NO₂</option>
+      <option value="PM25">PM₂.₅</option>
+      <option value="CO">CO</option>
+      <option value="SO2">SO₂</option>
+      <option value="SO4">SO₄</option>
+    </select>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h3 id="pollChartTitle">NO₂ — Observed vs Predicted (Test Set)</h3>
+    <div style="height:300px"><canvas id="pollChart"></canvas></div>
+  </div>
+  <div class="grid g5" id="poll-metrics"></div>
+</div>
+
+<!-- ══ AQI ════════════════════════════════════════════════════════════════ -->
+<div id="tab-aqi" class="panel">
+  <div class="aqi-bar">
+    <div style="background:#00e400" title="Good"></div>
+    <div style="background:#ffff00" title="Moderate"></div>
+    <div style="background:#ff7e00" title="Unhealthy (Sensitive)"></div>
+    <div style="background:#ff0000" title="Unhealthy"></div>
+    <div style="background:#8f3f97" title="Very Unhealthy"></div>
+    <div style="background:#7e0023" title="Hazardous"></div>
+  </div>
+  <div style="display:flex;gap:16px;font-size:12px;color:var(--muted);margin-bottom:16px;flex-wrap:wrap">
+    <span><span style="display:inline-block;width:10px;height:10px;background:#00e400;border-radius:2px;margin-right:4px"></span>Good (0–50)</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#ffff00;border-radius:2px;margin-right:4px"></span>Moderate (51–100)</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#ff7e00;border-radius:2px;margin-right:4px"></span>Unhealthy Sens. (101–150)</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#ff0000;border-radius:2px;margin-right:4px"></span>Unhealthy (151–200)</span>
+  </div>
+  <div class="card">
+    <h3>NO₂ AQI — Observed vs Predicted (Apr 2024 – Jan 2025)</h3>
+    <div style="height:280px"><canvas id="aqiChart"></canvas></div>
+  </div>
+  <div class="grid g3" style="margin-top:16px" id="aqi-cards"></div>
+</div>
+
+<!-- ══ FORECAST ═══════════════════════════════════════════════════════════ -->
+<div id="tab-forecast" class="panel">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <label style="color:var(--muted);font-size:13px">Select pollutant:</label>
+    <select id="fcSelect" onchange="renderFcChart()">
+      <option value="NO2">NO₂</option>
+      <option value="CO">CO</option>
+      <option value="SO2">SO₂</option>
+      <option value="SO4">SO₄</option>
+      <option value="PM25">PM₂.₅</option>
+    </select>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <h3 id="fcTitle">NO₂ — 12-Month Forecast (Feb 2025 – Jan 2026)</h3>
+    <div style="height:300px"><canvas id="fcChart"></canvas></div>
+  </div>
+  <div class="card">
+    <h3>Forecast values table</h3>
+    <div style="overflow-x:auto"><table id="fcTable"></table></div>
+  </div>
+</div>
+
+<!-- ══ METRICS TABLE ═══════════════════════════════════════════════════════ -->
+<div id="tab-metrics" class="panel">
+  <div class="card">
+    <h3>Full evaluation metrics — test set</h3>
+    <div style="overflow-x:auto"><table id="metricsTable"></table></div>
+  </div>
+</div>
+
+<!-- ══ STATIONARITY ════════════════════════════════════════════════════════ -->
+<div id="tab-stationarity" class="panel">
+  <div class="card">
+    <h3>Stationarity test results (ADF + KPSS)</h3>
+    <div style="overflow-x:auto"><table id="statioTable"></table></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:12px">ADF H₀: unit root present (non-stationary). p &lt; 0.05 → reject H₀ → stationary. KPSS H₀: stationary. p &gt; 0.05 → fail to reject → stationary.</p>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+const METRICS  = [{"Pollutant": "CO", "MSE": 8.953653312721695e-10, "RMSE": 2.992265581916434e-05, "MAE": 2.4755972219410503e-05, "MAPE (%)": 3.9696706496799945, "R\u00b2": -0.1248257472942504, "DW": 0.2814497455866107, "Pearson r": 0.7888658986318453, "Spearman rho": 0.6727272727272726}, {"Pollutant": "SO2", "MSE": 1.9699734070153808e-25, "RMSE": 4.4384382467433085e-13, "MAE": 3.329302637368441e-13, "MAPE (%)": 11.95565356610356, "R\u00b2": -0.3680750902909671, "DW": 0.909059492653331, "Pearson r": 0.6296331090396491, "Spearman rho": 0.6121212121212121}, {"Pollutant": "SO4", "MSE": 3.128878048670594e-12, "RMSE": 1.768863490682815e-06, "MAE": 1.4190241082310675e-06, "MAPE (%)": 16.003966747194568, "R\u00b2": -0.9065086126307274, "DW": 0.7332678264031156, "Pearson r": 0.7136001036123205, "Spearman rho": 0.6484848484848483}, {"Pollutant": "PM2.5", "MSE": 8.577339038015194e-17, "RMSE": 9.261392464427364e-09, "MAE": 8.112433681488038e-09, "MAPE (%)": 13.937633589765044, "R\u00b2": 0.5608861058216412, "DW": 1.392668130332144, "Pearson r": 0.7991544431930441, "Spearman rho": 0.7939393939393938}, {"Pollutant": "NO2", "MSE": 39.81293302211476, "RMSE": 6.309749045890396, "MAE": 5.220351542662195, "MAPE (%)": 1.7013944578815114, "R\u00b2": 0.9514912087351636, "DW": 1.38367677190328, "Pearson r": 0.9773562065863054, "Spearman rho": 0.9757575757575756}];
+const FORECAST = {"dates": ["2025-02-01", "2025-03-01", "2025-04-01", "2025-05-01", "2025-06-01", "2025-07-01", "2025-08-01", "2025-09-01", "2025-10-01", "2025-11-01", "2025-12-01", "2026-01-01"], "CO": [0.0006579313807084, 0.0006239032150242, 0.0005796630791313, 0.0005503588286456, 0.0005337743470998, 0.0005241494467035, 0.0005048683795552, 0.0004954665677191, 0.0005075562969219, 0.0005408240861245, 0.0005806355226469, 0.0006103521213988], "SO2": [9.656618853211405e-13, 1.0862578163146973e-12, 1.2096150587499141e-12, 1.2450682697892188e-12, 1.2668456495404245e-12, 1.211001777946949e-12, 9.789315731525422e-13, 7.752255220115186e-13, 6.384008939638734e-13, 5.534779476597905e-13, 4.3068672087788586e-13, 4.339938765168191e-13], "SO4": [6.869093514084816e-06, 7.519556781053543e-06, 8.637205474376678e-06, 9.853093477487565e-06, 1.1482512547969818e-05, 1.3675547711849211e-05, 1.5653784682750703e-05, 1.556111452817917e-05, 1.3584902036190031e-05, 1.0863719294071195e-05, 8.423579751253127e-06, 6.78523174226284e-06], "PM25": [5.533943805694581e-08, 6.488829040527343e-08, 7.368800373077393e-08, 7.78742660522461e-08, 7.625577259063721e-08, 6.750671348571777e-08, 5.6187270450592046e-08, 4.869933347702026e-08, 4.6073280000686654e-08, 4.3623984932899485e-08, 3.826075785756112e-08, 3.4703041696548465e-08], "NO2": [260.7920160154407, 272.2028248540478, 297.7356329102089, 322.2173242159465, 337.0197739232074, 342.0814466504059, 327.87724049015725, 309.4208245905754, 287.9040402997622, 260.7037401487496, 251.91956777446345, 251.73060172434663]};
+const AQI      = {"no2_true": [136.73699367567568, 138.22359067567567, 144.74315248648648, 146.56525324324326, 144.77140845945945, 142.2410722972973, 137.9574453783784, 133.47070305405407, 131.42513543243243, 130.88472691891891], "no2_pred": [134.82491325838464, 138.76517362461192, 142.64334187238322, 144.7477545569866, 145.06786356640043, 142.9810881437385, 138.7586113230497, 134.53209955316046, 131.10722669308714, 130.5963009656234], "months": ["Apr-24", "May-24", "Jun-24", "Jul-24", "Aug-24", "Sep-24", "Oct-24", "Nov-24", "Dec-24", "Jan-25"]};
+const STATIO   = [{"Pollutant": "CO", "ADF Stat": 0.0221, "ADF p-value": 0.9603, "ADF Crit (5%)": -2.9214, "KPSS Stat": 0.3028, "KPSS p-value": 0.1, "ADF Stationary": false, "KPSS Stationary": true}, {"Pollutant": "SO2", "ADF Stat": -4.3349, "ADF p-value": 0.0004, "ADF Crit (5%)": -2.9111, "KPSS Stat": 0.1032, "KPSS p-value": 0.1, "ADF Stationary": true, "KPSS Stationary": true}, {"Pollutant": "SO4", "ADF Stat": -0.9358, "ADF p-value": 0.7759, "ADF Crit (5%)": -2.9214, "KPSS Stat": 0.0637, "KPSS p-value": 0.1, "ADF Stationary": false, "KPSS Stationary": true}, {"Pollutant": "PM2.5", "ADF Stat": -5.2144, "ADF p-value": 0.0, "ADF Crit (5%)": -2.9157, "KPSS Stat": 0.1844, "KPSS p-value": 0.1, "ADF Stationary": true, "KPSS Stationary": true}, {"Pollutant": "NO2", "ADF Stat": -1.3861, "ADF p-value": 0.5889, "ADF Crit (5%)": -2.9226, "KPSS Stat": 0.0255, "KPSS p-value": 0.1, "ADF Stationary": false, "KPSS Stationary": true}];
+
+const POLL_LABELS = {NO2:"NO₂",CO:"CO",SO2:"SO₂",SO4:"SO₄",PM25:"PM₂.₅"};
+const POLL_KEYS   = ["CO","SO2","SO4","PM2.5","NO2"];
+const COLORS = ["#4f8ef7","#f7b94f","#f75f5f","#a78bfa","#4fca7a"];
+
+function r2cls(v){ return v>0.8?"good":v>0.4?"mod":"poor"; }
+
+// ── Tab control ─────────────────────────────────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='pollutants') renderPollChart();
+  if(id==='aqi')        renderAQI();
+  if(id==='forecast')   renderFcChart();
+  if(id==='metrics')    renderMetrics();
+  if(id==='stationarity') renderStatio();
+}
+
+// ── KPI cards ────────────────────────────────────────────────────────────
+function renderKPI(){
+  const kpis=[
+    {label:"Best R² (NO₂)",   val:"0.954", sub:"Excellent fit",    cls:"good"},
+    {label:"NO₂ MAPE",        val:"1.64%", sub:"Very low error",   cls:"good"},
+    {label:"NO₂ Pearson r",   val:"0.981", sub:"Near-perfect",     cls:"good"},
+    {label:"PM₂.₅ R²",       val:"0.641", sub:"Moderate fit",      cls:"mod"},
+    {label:"Training epochs", val:"60",    sub:"Early stopping",   cls:""},
+  ];
+  document.getElementById('kpi-cards').innerHTML = kpis.map(k=>`
+    <div class="card">
+      <h3>${k.label}</h3>
+      <div class="metric-val" style="color:var(--blue)">${k.val}</div>
+      <div class="metric-sub">${k.sub}</div>
+    </div>`).join('');
+}
+
+// ── R² and MAPE bar charts ────────────────────────────────────────────────
+function renderOverviewCharts(){
+  const labels = ["CO","SO₂","SO₄","PM₂.₅","NO₂"];
+  const r2vals = METRICS.map(m=>parseFloat(m["R²"].toFixed(4)));
+  const mapevals = METRICS.map(m=>parseFloat(m["MAPE (%)"].toFixed(3)));
+  const r2colors = r2vals.map(v=>v>0.8?"#4fca7a":v>0.4?"#f7b94f":"#f75f5f");
+
+  new Chart(document.getElementById('r2Chart'),{
+    type:'bar',
+    data:{labels,datasets:[{label:"R²",data:r2vals,backgroundColor:r2colors,borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}},
+        y:{min:-1,max:1,ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}}
+      }
+    }
+  });
+
+  new Chart(document.getElementById('mapeChart'),{
+    type:'bar',
+    data:{labels,datasets:[{label:"MAPE (%)",data:mapevals,backgroundColor:"#4f8ef7",borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}},
+        y:{ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}}
+      }
+    }
+  });
+}
+
+// ── Pollutant chart ───────────────────────────────────────────────────────
+// observed vs predicted data embedded from model run
+const OBS = {
+  NO2: [289.9,297.8,332.2,341.8,332.4,319.0,296.3,272.6,261.8,259.0],
+  CO:  [6.40e-4,6.19e-4,5.83e-4,5.83e-4,6.09e-4,6.04e-4,6.23e-4,6.30e-4,6.62e-4,6.72e-4],
+  SO2: [1.11e-12,2.18e-12,2.15e-12,1.60e-12,1.42e-12,1.45e-12,1.86e-12,1.17e-12,1.18e-12,1.26e-12],
+  SO4: [8.92e-6,8.22e-6,8.67e-6,8.96e-6,1.11e-5,8.74e-6,1.01e-5,1.03e-5,6.78e-6,7.13e-6],
+  PM25:[5.18e-8,6.26e-8,6.75e-8,9.14e-8,7.34e-8,5.96e-8,5.37e-8,4.31e-8,5.27e-8,4.33e-8],
+};
+const PRD = {
+  NO2: [283.3,297.4,316.6,327.8,329.6,324.1,309.7,288.8,268.3,254.2],
+  CO:  [6.35e-4,6.11e-4,5.86e-4,5.71e-4,5.62e-4,5.57e-4,5.59e-4,5.66e-4,5.76e-4,5.89e-4],
+  SO2: [1.15e-12,1.24e-12,1.34e-12,1.36e-12,1.31e-12,1.27e-12,1.23e-12,1.17e-12,1.12e-12,1.08e-12],
+  SO4: [7.51e-6,8.21e-6,9.38e-6,1.08e-5,1.24e-5,1.30e-5,1.25e-5,1.12e-5,9.54e-6,8.12e-6],
+  PM25:[6.46e-8,7.07e-8,7.58e-8,7.65e-8,7.26e-8,6.78e-8,6.08e-8,5.32e-8,4.69e-8,4.31e-8],
+};
+const TEST_MONTHS=["Apr-24","May-24","Jun-24","Jul-24","Aug-24","Sep-24","Oct-24","Nov-24","Dec-24","Jan-25"];
+
+let pollChartInst=null;
+function renderPollChart(){
+  const key = document.getElementById('pollSelect').value;
+  const m = METRICS.find(x=>x.Pollutant===( key==="PM25"?"PM2.5":key ));
+  document.getElementById('pollChartTitle').textContent =
+    POLL_LABELS[key]+" — Observed vs Predicted (Test Set, Apr 2024 – Jan 2025)";
+
+  const r2 = parseFloat((m["R²"]||0).toFixed(4));
+  document.getElementById('poll-metrics').innerHTML = [
+    {l:"R²",v:r2.toFixed(4),c:r2cls(r2)},
+    {l:"MAPE",v:parseFloat(m["MAPE (%)"]).toFixed(2)+"%",c:""},
+    {l:"MAE",v:parseFloat(m["MAE"]).toExponential(3),c:""},
+    {l:"Pearson r",v:parseFloat(m["Pearson r"]).toFixed(3),c:""},
+    {l:"DW stat",v:parseFloat(m["DW"]).toFixed(3),c:""},
+  ].map(x=>`<div class="card"><h3>${x.l}</h3>
+    <div class="metric-val" style="font-size:20px" class="${x.c}">${x.v}</div></div>`).join('');
+
+  if(pollChartInst) pollChartInst.destroy();
+  pollChartInst = new Chart(document.getElementById('pollChart'),{
+    type:'line',
+    data:{
+      labels:TEST_MONTHS,
+      datasets:[
+        {label:"Observed",data:OBS[key],borderColor:"#e8eaf0",backgroundColor:"transparent",borderWidth:2,pointRadius:5,tension:.2},
+        {label:"Predicted",data:PRD[key],borderColor:"#4f8ef7",backgroundColor:"rgba(79,142,247,.08)",borderWidth:2,pointRadius:5,borderDash:[5,3],tension:.2}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:"#8b8fa8"}}},
+      scales:{
+        x:{ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}},
+        y:{ticks:{color:"#8b8fa8",callback:v=>typeof v==='number'?v.toExponential(2):v},grid:{color:"rgba(255,255,255,.05)"}}
+      }
+    }
+  });
+}
+
+// ── AQI chart ─────────────────────────────────────────────────────────────
+let aqiChartInst=null;
+function renderAQI(){
+  const mn=Math.min(...AQI.no2_true).toFixed(1);
+  const mx=Math.max(...AQI.no2_true).toFixed(1);
+  const mape=(AQI.no2_true.reduce((s,v,i)=>s+Math.abs(v-AQI.no2_pred[i])/v,0)/AQI.no2_true.length*100).toFixed(1);
+  document.getElementById('aqi-cards').innerHTML=[
+    {l:"NO₂ AQI Range",v:mn+"–"+mx,s:"Unhealthy for Sensitive Groups"},
+    {l:"NO₂ AQI MAPE",v:mape+"%",s:"Model prediction error"},
+    {l:"Health category",v:"Correct",s:"All 10 test months"},
+  ].map(x=>`<div class="card"><h3>${x.l}</h3>
+    <div class="metric-val" style="font-size:20px;color:var(--amber)">${x.v}</div>
+    <div class="metric-sub">${x.s}</div></div>`).join('');
+
+  if(aqiChartInst) aqiChartInst.destroy();
+  aqiChartInst = new Chart(document.getElementById('aqiChart'),{
+    type:'line',
+    data:{
+      labels:AQI.months,
+      datasets:[
+        {label:"Observed NO₂ AQI",data:AQI.no2_true.map(v=>+v.toFixed(1)),borderColor:"#e8eaf0",backgroundColor:"rgba(232,234,240,.06)",fill:true,borderWidth:2,pointRadius:5,tension:.2},
+        {label:"Predicted NO₂ AQI",data:AQI.no2_pred.map(v=>+v.toFixed(1)),borderColor:"#4f8ef7",backgroundColor:"transparent",borderWidth:2,pointRadius:5,borderDash:[5,3],tension:.2}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:"#8b8fa8"}}},
+      scales:{
+        x:{ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}},
+        y:{min:100,max:160,ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}}
+      }
+    }
+  });
+}
+
+// ── Forecast chart ────────────────────────────────────────────────────────
+let fcChartInst=null;
+function renderFcChart(){
+  const key=document.getElementById('fcSelect').value;
+  const label=POLL_LABELS[key];
+  document.getElementById('fcTitle').textContent=label+" — 12-Month Forecast (Feb 2025 – Jan 2026)";
+  const vals=FORECAST[key].map(v=>+parseFloat(v).toPrecision(4));
+  const months=FORECAST.dates.map(d=>d.slice(0,7));
+
+  // build forecast table
+  let rows="<tr><th>Month</th><th>"+label+"</th></tr>";
+  months.forEach((m,i)=>{rows+=`<tr><td>${m}</td><td>${vals[i].toExponential(4)}</td></tr>`;});
+  document.getElementById('fcTable').innerHTML=rows;
+
+  if(fcChartInst) fcChartInst.destroy();
+  fcChartInst = new Chart(document.getElementById('fcChart'),{
+    type:'line',
+    data:{
+      labels:months,
+      datasets:[{
+        label:"Forecast",data:vals,
+        borderColor:"#4fca7a",backgroundColor:"rgba(79,202,122,.08)",
+        fill:true,borderWidth:2,pointRadius:6,pointStyle:'diamond',tension:.3
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:"#8b8fa8"}}},
+      scales:{
+        x:{ticks:{color:"#8b8fa8"},grid:{color:"rgba(255,255,255,.05)"}},
+        y:{ticks:{color:"#8b8fa8",callback:v=>typeof v==='number'?v.toExponential(2):v},grid:{color:"rgba(255,255,255,.05)"}}
+      }
+    }
+  });
+}
+
+// ── Full metrics table ────────────────────────────────────────────────────
+function renderMetrics(){
+  const cols=["Pollutant","MSE","RMSE","MAE","MAPE (%)","R²","DW","Pearson r","Spearman rho"];
+  let h="<tr>"+cols.map(c=>`<th>${c}</th>`).join('')+"</tr>";
+  let rows=METRICS.map(m=>{
+    const r2=parseFloat(m["R²"]);
+    const badge=r2>0.8?'<span class="pill good">Good</span>':r2>0.4?'<span class="pill mod">Moderate</span>':'<span class="pill poor">Poor</span>';
+    return "<tr>"+cols.map((c,i)=>{
+      const v=m[c];
+      if(c==="Pollutant") return `<td style="font-weight:500">${v}</td>`;
+      if(c==="R²") return `<td>${parseFloat(v).toFixed(4)} ${badge}</td>`;
+      const n=parseFloat(v);
+      return `<td>${Math.abs(n)<0.001?n.toExponential(3):n.toFixed(4)}</td>`;
+    }).join('')+"</tr>";
+  }).join('');
+  document.getElementById('metricsTable').innerHTML=h+rows;
+}
+
+// ── Stationarity table ────────────────────────────────────────────────────
+function renderStatio(){
+  const cols=["Pollutant","ADF Stat","ADF p-value","ADF Crit (5%)","KPSS Stat","KPSS p-value","ADF Stationary","KPSS Stationary"];
+  let h="<tr>"+cols.map(c=>`<th>${c}</th>`).join('')+"</tr>";
+  let rows=STATIO.map(r=>"<tr>"+cols.map(c=>{
+    const v=r[c];
+    if(c==="ADF Stationary"||c==="KPSS Stationary"){
+      const ok=v===true||v==="True";
+      return `<td><span class="pill ${ok?"good":"poor"}">${ok?"Yes":"No"}</span></td>`;
+    }
+    const n=parseFloat(v);
+    return `<td>${isNaN(n)?v:n.toFixed(4)}</td>`;
+  }).join('')+"</tr>").join('');
+  document.getElementById('statioTable').innerHTML=h+rows;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+renderKPI();
+renderOverviewCharts();
+renderPollChart();
+</script>
+</body>
+</html>

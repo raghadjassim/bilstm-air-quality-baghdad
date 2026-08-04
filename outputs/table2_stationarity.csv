@@ -1,0 +1,6 @@
+Pollutant,ADF Stat,ADF p-value,ADF Crit (5%),KPSS Stat,KPSS p-value,ADF Stationary,KPSS Stationary
+CO,0.0221,0.9603,-2.9214,0.3028,0.1,False,True
+SO2,-4.3349,0.0004,-2.9111,0.1032,0.1,True,True
+SO4,-0.9358,0.7759,-2.9214,0.0637,0.1,False,True
+PM2.5,-5.2144,0.0,-2.9157,0.1844,0.1,True,True
+NO2,-1.3861,0.5889,-2.9226,0.0255,0.1,False,True

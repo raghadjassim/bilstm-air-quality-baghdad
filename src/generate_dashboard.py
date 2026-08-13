@@ -10,7 +10,7 @@ Usage:
     python generate_dashboard.py
 
 Output:
-    outputs/airquality_dashboard.html   ← open this in Chrome / Firefox / Edge
+    outputs/index.html   ← open this in Chrome / Firefox / Edge
 """
 
 import pandas as pd
@@ -453,7 +453,7 @@ renderPollChart();
 </body>
 </html>"""
 
-out_path = OUT / "airquality_dashboard.html"
+out_path = OUT / "index.html"
 out_path.write_text(html, encoding="utf-8")
 print(f"\n✅  Dashboard saved to: {out_path.resolve()}")
 print("   → Open that file in Chrome, Firefox, or Edge")

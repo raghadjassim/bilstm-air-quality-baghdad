@@ -43,7 +43,71 @@
   .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:500}
   .aqi-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;margin:8px 0 14px}
   .aqi-bar div{flex:1}
-  select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:13px;cursor:pointer}
+    select{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:13px;cursor:pointer}
+
+  @media (max-width: 768px) {
+    body{font-size:13px;overflow-x:hidden}
+
+    header{
+      padding:1rem;
+      display:block;
+    }
+
+    header h1{
+      font-size:16px;
+      margin-bottom:4px;
+    }
+
+    header span{
+      display:block;
+      font-size:11px;
+      line-height:1.4;
+    }
+
+    .container{
+      padding:1rem;
+      width:100%;
+    }
+
+    .tabs{
+      overflow-x:auto;
+      flex-wrap:nowrap;
+    }
+
+    .tab{
+      flex:0 0 auto;
+      font-size:12px;
+      padding:8px 12px;
+    }
+
+    .g2,
+    .g3,
+    .g5{
+      grid-template-columns:1fr;
+    }
+
+    .card{
+      width:100%;
+      min-width:0;
+      padding:1rem;
+    }
+
+    .metric-val{
+      font-size:24px;
+    }
+
+    canvas{
+      max-width:100%;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .container{padding:.75rem}
+
+    header h1{font-size:15px}
+
+    .metric-val{font-size:22px}
+  }
 </style>
 </head>
 <body>
